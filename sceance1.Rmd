@@ -17,6 +17,9 @@ opts_chunk$set(echo=FALSE,
 
 library(reshape2)
 library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
 ```
 
 ## R Markdown
@@ -30,8 +33,6 @@ head(data)
 
 ## Including Plots
 
-
-
 ```{r pressure, echo=FALSE,message=F,warning=F}
 ggplot(melt(data), aes(x = variable, y = value)) + geom_boxplot()
 ```
@@ -42,3 +43,31 @@ ggplot(melt(data), aes(x = variable, y = value)) + geom_boxplot()
 notes non formelles :
 On voit sur le boxplot que les repliquats on la même "forme'.
 Les variables n'on pas le même ordre de grandeur, il faudra normaliser avant de faire l'ACP.
+
+
+```{r}
+res_pca = PCA(t(data), scale.unit = T, grap=T)
+```
+
+
+```{r}
+res_pca$eig
+```
+
+```{r}
+fviz_eig(res_pca)
+fviz_contrib(res_pca, choice="ind")
+fviz_contrib(res_pca, choice="var", axes = 1)
+fviz_contrib(res_pca, choice="var", axes = 2)
+# geom choix des var
+# contrib = -> sueil
+# tracer un corrplot de correlation
+# repeal = T
+# police
+```
+```{r}
+corrplot(t(res_pca$var$cor))
+res_pca$var$contribpca
+fviz_res_
+# qt 1 organisation des var -> ACP des variavbles
+```
