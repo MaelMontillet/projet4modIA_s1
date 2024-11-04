@@ -5,7 +5,18 @@ date: "2024-11-04"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+opts_chunk$set(echo=FALSE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE,
+               class.source="badCode")
+
+library(reshape2)
+library(ggplot2)
 ```
 
 ## R Markdown
@@ -14,16 +25,20 @@ Importer les données :
 
 ```{r}
 data <-read.table("DataProjet4modIA-2425.txt",header=T)
-#knitr::kable(data)
 head(data)
 ```
 
 ## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+```{r pressure, echo=FALSE,message=F,warning=F}
+ggplot(melt(data), aes(x = variable, y = value)) + geom_boxplot()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+## R Markdown
+notes non formelles :
+On voit sur le boxplot que les repliquats on la même "forme'.
+Les variables n'on pas le même ordre de grandeur, il faudra normaliser avant de faire l'ACP.
