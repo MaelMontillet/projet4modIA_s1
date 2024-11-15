@@ -1,0 +1,71 @@
+---
+title: "acp_variables"
+output: html_document
+date: "2024-11-15"
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE,
+               class.source="badCode")
+
+library(reshape2)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+```
+
+## R Markdown
+
+Importer les données :
+
+```{r}
+data <-read.table("DataProjet4modIA-2425.txt",header=T)
+head(data)
+```
+
+
+
+## R Markdown
+
+
+```{r}
+first_ind = as.data.frame(data[1:2, ])
+head(first_ind)
+
+
+preparer <- function(data){
+  # Moyenne des replicats
+  for (j in 1:18){
+    data[, j] = (data[, j] + data[, j+18]) / 2
+  }
+  #data = data[, -c(19:36)]
+  print(data)
+  
+  new = data.frame("h6", "h1", "T")
+  n_indiv = nrow(data)
+  indiv_T1 = c(data$T1_6h_R1, data$T1_1h_R1, rep(1, n_indiv))
+  print(indiv_T1)
+}
+
+preparer(first_ind)
+
+
+```
+for (i in 1:nrow(first_ind)){
+  row = first_ind[i,]
+  
+}
+
+
+```{r}
+(0.167 + -0.0123)/2
+(3.26 + 3.06895)/2
+```
