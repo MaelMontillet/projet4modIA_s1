@@ -1,0 +1,67 @@
+---
+title: "acp_variables"
+output: html_document
+date: "2024-11-15"
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE,
+               class.source="badCode")
+
+library(reshape2)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+```
+
+## R Markdown
+
+Importer les données :
+
+```{r}
+data <-read.table("DataProjet4modIA-2425.txt",header=T)
+head(data)
+```
+
+
+
+## R Markdown
+notes non formelles :
+On voit sur le boxplot que les repliquats on la même "forme'.
+Les variables n'on pas le même ordre de grandeur, il faudra normaliser avant de faire l'ACP.
+
+
+```{r}
+res_pca = PCA(t(data), scale.unit = T, grap=T)
+```
+
+
+```{r}
+res_pca$eig[1:15,]
+```
+
+```{r}
+fviz_eig(res_pca)
+fviz_contrib(res_pca, choice="ind")
+fviz_contrib(res_pca, choice="var", axes = 1)
+fviz_contrib(res_pca, choice="var", axes = 2)
+# geom choix des var
+# contrib = -> sueil
+# tracer un corrplot de correlation
+# repeal = T
+# police
+```
+```{r}
+corrplot(t(res_pca$var$cor))
+res_pca$var$contribpca
+fviz_res_
+# qt 1 organisation des var -> ACP des variavbles
+```
