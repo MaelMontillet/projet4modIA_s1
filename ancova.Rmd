@@ -37,26 +37,38 @@ head(data)
 
 
 ```{r}
-first_ind = as.data.frame(data[1:2, ])
-head(first_ind)
+#first_ind = as.data.frame(data[1:2, ])
+#head(first_ind)
 
-
-preparer <- function(data){
+mean_replicat <- function(data){
+  
   # Moyenne des replicats
   for (j in 1:18){
     data[, j] = (data[, j] + data[, j+18]) / 2
   }
-  #data = data[, -c(19:36)]
-  print(data)
+  data = data[, 1:18]
+  return(data)
+}
+
+preparer = function(data){
+  
+  data_m = mean_replicat(data)
   
   new = data.frame("h6", "h1", "T")
   n_indiv = nrow(data)
-  indiv_T1 = c(data$T1_6h_R1, data$T1_1h_R1, rep(1, n_indiv))
-  print(indiv_T1)
+  matrix_T1 = cbind(data_m$T1_1h_R1, data_m$T1_6h_R1, rep(1, n_indiv))
+  matrix_T2 = cbind(data_m$T2_1h_R1, data_m$T2_6h_R1, rep(2, n_indiv))
+  matrix_T3 = cbind(data_m$T3_1h_R1, data_m$T3_6h_R1, rep(3, n_indiv))
+  
+  matrix = rbind(matrix_T1, matrix_T2, matrix_T3)
+  
+  data_final = data.frame(h1 = matrix[, 1], h6 = matrix[, 2], t = matrix[, 3])
+  return(data_final)
 }
 
-preparer(first_ind)
-
+#mean_replicat(first_ind)
+data_ancova = preparer(data)
+head(data_ancova)
 
 ```
 for (i in 1:nrow(first_ind)){
