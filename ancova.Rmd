@@ -54,7 +54,7 @@ mean_replicat <- function(data){
 data_mean = mean_replicat(data)
 
 preparer = function(data){
-  
+  efudhfudh
   data_m = mean_replicat(data)
   
   new = data.frame("h6", "h1", "T")
