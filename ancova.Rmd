@@ -45,10 +45,13 @@ mean_replicat <- function(data){
   # Moyenne des replicats
   for (j in 1:18){
     data[, j] = (data[, j] + data[, j+18]) / 2
+    m = length(colnames(data)[j])
+    colnames(data)[j] = substr(colnames(data)[j], 1, nchar(colnames(data)[j]) - 3)
   }
   data = data[, 1:18]
   return(data)
 }
+data_mean = mean_replicat(data)
 
 preparer = function(data){
   
@@ -56,13 +59,14 @@ preparer = function(data){
   
   new = data.frame("h6", "h1", "T")
   n_indiv = nrow(data)
-  matrix_T1 = cbind(data_m$T1_1h_R1, data_m$T1_6h_R1, rep(1, n_indiv))
-  matrix_T2 = cbind(data_m$T2_1h_R1, data_m$T2_6h_R1, rep(2, n_indiv))
-  matrix_T3 = cbind(data_m$T3_1h_R1, data_m$T3_6h_R1, rep(3, n_indiv))
+  matrix_T1 = cbind(data_m$T1_1h, data_m$T1_3h, data_m$T1_6h, rep(1, n_indiv))
+  matrix_T2 = cbind(data_m$T2_1h, data_m$T2_3h, data_m$T2_6h, rep(2, n_indiv))
+  matrix_T3 = cbind(data_m$T3_1h, data_m$T3_3h, data_m$T3_6h, rep(3, n_indiv))
   
   matrix = rbind(matrix_T1, matrix_T2, matrix_T3)
   
-  data_final = data.frame(h1 = matrix[, 1], h6 = matrix[, 2], t = matrix[, 3])
+  data_final = data.frame(h1 = matrix[, 1], h3 = matrix[, 2], h6 = matrix[, 3], t = matrix[, 4])
+  data_final$t = as.factor(data_final$t)
   return(data_final)
 }
 
@@ -78,6 +82,181 @@ for (i in 1:nrow(first_ind)){
 
 
 ```{r}
-(0.167 + -0.0123)/2
-(3.26 + 3.06895)/2
+ggplot(data_ancova,aes(x=h1,y=h6))+ 
+  geom_point(aes(shape=t,col=t))
+
+ind = which(data_ancova$t == 1)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6)) + geom_point()
+
+ind = which(data_ancova$t == 2)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6)) + geom_point()
+
+ind = which(data_ancova$t == 3)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6))+ geom_point()
+```
+
+
+```{r}
+ggplot(data_ancova,aes(x=h3,y=h6))+ 
+  geom_point(aes(shape=t,col=t))
+```
+
+
+```{r}
+complet = lm(h6~h1*t, data=data_ancova)
+summary(complet)
+```
+
+
+```{r}
+#modèle régulier
+complet_reg = lm(h6~-1 + t + t:h1, data=data_ancova)
+summary(complet_reg)
+```
+
+
+```{r}
+ggplot(data_ancova, aes(x=h1,y=h6, shape=t,col=t))+ 
+  geom_point()+
+  geom_smooth(method='lm',se=T) 
+# R ajusté très mauvais
+# Possibilité de simplifier ?
+# -> interaction h1:t ?
+# -> même coefficients t2 t3
+```
+
+
+```{r}
+mod.add = lm(h1 ~ h6 + t, data_ancova)
+anova(complet_reg,  mod.add)
+```
+
+
+```{r}
+complet_reg = lm(h6~-1 + t + t:h3, data=data_ancova)
+summary(complet_reg)
+
+ggplot(data_ancova, aes(x=h3,y=h6, shape=t,col=t))+ 
+  geom_point()+
+  geom_smooth(method='lm',se=T)
+```
+
+
+```{r}
+complet = lm(T3_6h ~., data=data_mean)
+summary(complet)
+# Il y a des vcariables non significatives donc on peut faire une selection
+# Les plus significatives sont l'heure d'avant pour T3 et le traitement 2 à 6h car les traitement 2 et 3 se ressemblent beaucoup.
+```
+
+
+```{r}
+library(leaps)
+choix = regsubsets(T3_6h~., data=data_mean, method="backward", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+```
+
+
+```{r}
+choix = regsubsets(T3_6h~., data=data_mean, method="forward", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+```
+
+
+```{r}
+choix = regsubsets(T3_6h~., data=data_mean, method="seqrep", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+
+# Les valeurs sont très proches donc c'est interresant de tester des modèle parcimonieux qui sont pas le meilleur.
+```
+
+
+```{r}
+model_selected = step(complet, direction="both") #AIC
+summary
+```
+
+
+```{r}
+# Cp et Aic -> choississent les 3 même variable en moins et grand écarts avec les suivants 
+
+test = anova(complet, model_selected)
+test
+```
+
+
+```{r}
+# Les autres critères ne sont pas si sûr -> peu d'écarts entre les valeurs 
+
+# Plus partimonieux à 10000 de bic
+model_bic = lm(T3_6h~T1_5h + T1_6h + T2_5h + T2_6h + T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+
+#premier bic
+model_bic = lm(T3_6h~T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + 
+    T2_1h + T2_2h + T2_3h + T2_5h + T2_6h + T3_1h + 
+    T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+
+#3ème meilleur r2adj avec une valeur proche du meilleur
+model_bic = lm(T3_6h~T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + 
+    T2_1h + T2_2h + T2_3h + T2_5h + T2_6h + T3_1h + T3_4h +
+    T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+```
+
+```{r}
+data_mean
+```
+
+```{r}
+tildeY=scale(data_mean$T3_6h,center=T,scale=T)
+tildeX=scale(data_mean[, -18],center=T,scale=T)
+```
+
+```{r}
+library(glmnet)
+lambda_seq<-10^(seq(-4,4,0.01))
+fitlasso <- glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c("gaussian"), intercept = F) # A COMPLETER
+summary(fitlasso)
+```
+
+2. Tracez le chemin de régularisation de chacune des variables et commentez
+
+```{r,eval=F}
+df=data.frame(lambda = rep(fitlasso$lambda,ncol(tildeX)), theta=as.vector(t(fitlasso$beta)),variable=rep(colnames(tildeX),each=length(fitlasso$lambda)))
+g3 = ggplot(df,aes(x=lambda,y=theta,col=variable))+
+  geom_line()+
+  theme(legend.position="bottom")+
+  scale_x_log10()
+ggplotly(g3)
+```
+
+3. A l'aide de la fonction `cv.glmnet()` mettez en place une validation croisée pour sélectionner le "meilleur" $\lambda$ par MSE. En pratique, il est préconisé d'utilisé `lambda.1se` (la plus grande valeur de $\lambda$ telle que l'erreur standard se situe à moins de 1 de celle du minimum).  
+
+```{r,eval=F}
+lasso_cv <- cv.glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c("gaussian"), intercept = F) # A COMPLETER
+best_lambda <-lasso_cv$lambda.min
+lambda1se <- lasso_cv$lambda.1se
+lasso_cv$lambda.min
+```
+
+La valeur de $\lambda$ sélectionnée vaut 0.02884032
+
+```{r,eval=F}
+g3=g3 + 
+  geom_vline(xintercept = best_lambda,linetype="dotted", color = "red")+
+  geom_vline(xintercept = lambda1se,linetype="dotted", color = "blue")+
+  scale_x_log10()
+g3
+
 ```

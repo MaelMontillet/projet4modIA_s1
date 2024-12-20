@@ -40,19 +40,32 @@ Les variables n'on pas le même ordre de grandeur, il faudra normaliser avant de
 
 
 ```{r}
-res_pca = PCA(t(data), scale.unit = T, grap=T)
+data_t = as.data.frame(t(data))
+head(data_t)
+
+res_pca = PCA(data_t, scale.unit = T, grap=F)
+
+fviz_pca_ind(res_pca)
+rand_var = sample(colnames(data_t),15)
+fviz_pca_var(res_pca, select.var = list(name=rand_var, cos2=NULL, contrib=NULL))
+fviz_pca_var(res_pca, select.var = list(contrib=5))
 ```
 
 
 ```{r}
-res_pca$eig[1:15,]
+n = length(data$T1_1h_R1)
+n
+(1/sqrt(n)) * res_pca$eig[1:15,]
+
+
 ```
 
 ```{r}
 fviz_eig(res_pca)
-fviz_contrib(res_pca, choice="ind")
-fviz_contrib(res_pca, choice="var", axes = 1)
-fviz_contrib(res_pca, choice="var", axes = 2)
+fviz_contrib(res_pca, choice="ind", axes=1)
+fviz_contrib(res_pca, choice="ind", axes=2)
+fviz_contrib(res_pca, choice="var", axes = 1, top=20)
+fviz_contrib(res_pca, choice="var", axes = 2, top=20)
 # geom choix des var
 # contrib = -> sueil
 # tracer un corrplot de correlation
