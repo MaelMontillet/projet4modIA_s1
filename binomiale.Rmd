@@ -1,0 +1,121 @@
+---
+title: "binomiale"
+output: html_document
+date: "2024-11-15"
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE,
+               class.source="badCode")
+
+library(reshape2)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+```
+
+## R Markdown
+
+Importer les données :
+
+```{r}
+data <-read.table("DataProjet4modIA-2425.txt",header=T)
+head(data)
+```
+
+
+
+## R Markdown
+
+
+```{r}
+#first_ind = as.data.frame(data[1:2, ])
+#head(first_ind)
+
+mean_replicat <- function(data){
+  
+  # Moyenne des replicats
+  for (j in 1:18){
+    data[, j] = (data[, j] + data[, j+18]) / 2
+    m = length(colnames(data)[j])
+    colnames(data)[j] = substr(colnames(data)[j], 1, nchar(colnames(data)[j]) - 3)
+  }
+  data = data[, 1:18]
+  return(data)
+}
+data_mean = mean_replicat(data)
+
+preparer = function(data){
+  data_m = mean_replicat(data)
+  
+  new = data.frame("T1_1h", "T1_2h", "T1_3h", "T2_1h", "T2_2h", "T2_2h", "code")
+    
+  sur_exprime = data_m[data_m$T3_6h > 1, ]
+  n_sur = nrow(sur_exprime)
+  matrix_sur = cbind(sur_exprime$T1_1h, sur_exprime$T1_2h, sur_exprime$T1_3h, sur_exprime$T2_1h, sur_exprime$T2_2h, sur_exprime$T2_3h, rep(1, n_sur))
+    
+  sous_exprime = data_m[data_m$T3_6h < -1, ]
+  n_sous = nrow(sous_exprime)
+  matrix_sous = cbind(sous_exprime$T1_1h, sous_exprime$T1_2h, sous_exprime$T1_3h, sous_exprime$T2_1h, sous_exprime$T2_2h, sous_exprime$T2_3h, rep(0, n_sous))
+  
+  matrix = rbind(matrix_sur, matrix_sous)
+  
+  data_final = data.frame(T1_1h = matrix[, 1], T1_2h = matrix[, 2], T1_3h = matrix[, 3], 
+                          T2_1h = matrix[, 4], T2_2h = matrix[, 5], T2_3h = matrix[, 6], code = matrix[, 7])
+  data_final$code = as.factor(data_final$code)
+  return(data_final)
+}
+
+#mean_replicat(first_ind)
+data_binomial = preparer(data)
+head(data_binomial)
+```
+
+
+```{r}
+complet = glm(code~., family = binomial, data=data_binomial)
+summary(complet)
+
+```
+```{r}
+pseudoR2 = 1 - complet$deviance / complet$null.deviance
+pseudoR2
+nrow(data_binomial)
+```
+
+
+```{r}
+l<-1000
+perm<-sample(nrow(data_binomial)) # permuter les données pour apprendre sur tt le domaine
+# Echantillon d'apprentissage
+dapp<-data_binomial[perm[1:l],]
+# Echantillon test
+dtest<-data_binomial[-perm[1:l],]
+
+# Estimation du modèle sur l'échantillon d'apprentissage
+modelapp<-glm(code~., family = binomial, data=dapp)
+
+# Prédictions sur l'échantillon test
+prev1<-predict(modelapp,newdata=dtest, type="response")
+
+# Calcul de la probabilité d'erreur
+print("complet")
+mean(as.numeric(prev1>0.5)!=dtest$code)
+
+```
+
+
+```{r}
+library(pROC)
+rocobj1 <- roc(dtest$code, prev1)
+
+ggroc(list(complet=rocobj1))
+```

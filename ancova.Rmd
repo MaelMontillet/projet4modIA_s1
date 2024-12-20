@@ -1,5 +1,5 @@
 ---
-title: "acp_variables"
+title: "ancova"
 output: html_document
 date: "2024-11-15"
 ---
@@ -54,7 +54,6 @@ mean_replicat <- function(data){
 data_mean = mean_replicat(data)
 
 preparer = function(data){
-  efudhfudh
   data_m = mean_replicat(data)
   
   new = data.frame("h6", "h1", "T")
@@ -225,7 +224,7 @@ tildeX=scale(data_mean[, -18],center=T,scale=T)
 
 ```{r}
 library(glmnet)
-lambda_seq<-10^(seq(-4,4,0.01))
+lambda_seq<-10^(seq(-10,1,0.001))
 fitlasso <- glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c("gaussian"), intercept = F) # A COMPLETER
 summary(fitlasso)
 ```
@@ -233,6 +232,7 @@ summary(fitlasso)
 2. Tracez le chemin de régularisation de chacune des variables et commentez
 
 ```{r,eval=F}
+library(plotly)
 df=data.frame(lambda = rep(fitlasso$lambda,ncol(tildeX)), theta=as.vector(t(fitlasso$beta)),variable=rep(colnames(tildeX),each=length(fitlasso$lambda)))
 g3 = ggplot(df,aes(x=lambda,y=theta,col=variable))+
   geom_line()+
@@ -248,6 +248,7 @@ lasso_cv <- cv.glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c
 best_lambda <-lasso_cv$lambda.min
 lambda1se <- lasso_cv$lambda.1se
 lasso_cv$lambda.min
+lasso_cv$lambda.1se
 ```
 
 La valeur de $\lambda$ sélectionnée vaut 0.02884032
@@ -258,5 +259,20 @@ g3=g3 +
   geom_vline(xintercept = lambda1se,linetype="dotted", color = "blue")+
   scale_x_log10()
 g3
+```
 
+
+```{r,eval=F}
+library(coefplot)
+extract.coef(lasso_cv, lambda=lambda1se)
+```
+
+
+```{r,eval=F}
+model_lasso = lm(T3_6h~.-T1_1h-T1_5h-T2_5h, data=data_mean)
+anova(complet, model_lasso) 
+```
+
+
+```{r,eval=F}
 ```
