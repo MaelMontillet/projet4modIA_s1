@@ -1,0 +1,754 @@
+---
+title: "Projet AD et EMS"
+author: "Arthur Augusto, Montillet Mael et Chikhaoui Linda"
+institute : "INSA Toulouse / In7"
+date: "`r Sys.Date()`"
+#bibliography: "exbiblio.bib"
+#output: 
+ # pdf_document :
+  #  toc : TRUE
+   # toc_depth : 2
+    #number_section : TRUE
+header-includes:
+   - \usepackage{dsfont}
+   - \usepackage{color}
+   - \newcommand{\1}{\mathds{1}}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+opts_chunk$set(echo=FALSE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE,
+               class.source="badCode")
+
+library(reshape2)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+library(mclust)
+library(clusterSim)
+library(ggplot2)
+library(circlize)
+library(viridis)
+```
+
+
+# Etude du jeu de données
+
+On observe pour G = 1615 gènes d’une plante modèle les valeurs suivantes :
+Ygtsr = log2(Xgtsr + 1) − log2(Xgt0 + 1)
+o`u
+• Xgtsr est la mesure d’expression du gène g ∈ {G1, . . . , G1615} pour le traitement t ∈ {T 1, T 2, T 3}
+pour le réplicat r ∈ {R1, R2} et au temps s ∈ {1h, 2h, 3h, 4h, 5h, 6h}
+• Xgt0 est l’expression du gène g pour un traitement de référence t0
+
+## Récupération des données 
+
+```{r }
+data <-read.table("DataProjet4modIA-2425.txt",header=T)
+
+kable(head(data),caption="\\label{tab:data}Les premières lignes du jeu de données du projet")
+
+```
+## Statistiques descriptives
+
+Nous faisons ici quelques statistiques descriptives pour prendre en main les données. 
+
+
+### Summary 
+```{r , echo=FALSE,message=F,warning=F}
+summary(data)
+
+```
+On remarque dans notre jeu de données que toutes nos variables sont quantitatives
+
+### ggplot
+```{r pressure, echo=FALSE,message=F,warning=F,fig.cap="\\label{fig:ggplot}ggplot entre toutes les  variables quantitatives",fig.height=3}
+
+ggplot(melt(data), aes(x = variable, y = value)) + geom_boxplot()
+```
+
+### corrplot
+```{r, echo=FALSE,message=F,warning=F}
+
+#Pour R1
+corrplot(cor(data[, c(1:6)]), method = "ellipse")
+corrplot(cor(data[, c(7:12)]), method = "ellipse")
+corrplot(cor(data[, c(13:18)]), method = "ellipse")
+
+```
+
+```{r, echo=FALSE,message=F,warning=F}
+
+#Pour R2
+corrplot(cor(data[, c(19:24)]), method = "ellipse")
+corrplot(cor(data[, c(25:30)]), method = "ellipse")
+corrplot(cor(data[, c(31:36)]), method = "ellipse")
+
+```
+## Interprétation
+
+
+
+Dans cette étude, nous analysons 24 variables quantitatives afin de réduire la dimensionnalité des données initiales. Pour cela, nous appliquons l'Analyse en Composantes Principales (ACP), une méthode factorielle adaptée à ce type de variables.
+
+L'observation des données à l'aide de ggplot révèle une distribution non uniforme et une hétérogénéité entre les variables. Pour corriger ce problème, il est indispensable de normaliser les données avant de procéder à l'ACP. Cette normalisation peut être effectuée directement en ajoutant le paramètre `scale.unit = TRUE` dans la commande `PCA` de la bibliothèque `FactoMineR`.
+
+En réduisant la dimension à deux composantes principales, nous obtenons une variance cumulée de 86,91 %. Cela signifie que plus de 86 % de l'information initiale est conservée, ce qui rend ce choix optimal. Les données sont alors projetées dans un espace bidimensionnel pour faciliter l'analyse.
+
+Cependant, certaines variables présentent une forte dispersion, comme T3_6h_R2, tandis que d'autres, telles que T1_1h_R1, montrent une faible dispersion. Si les données ne sont pas normalisées, l'axe principal serait dominé par les variables à grande variance, ce qui écraserait les contributions des autres variables. Ainsi, normaliser les données permet de garantir que chaque variable, une fois standardisée (variance égale à 1), contribue de manière égale à la construction des axes. Aucune variable n'est alors privilégiée.
+
+En utilisant la fonction summary, cette différence est confirmée. Par exemple :
+
+    Pour la variable T1_1h_R1, la différence entre la médiane et le 3ᵉ quartile est de 0,13.
+    Pour la variable T3_6h_R2, cette différence est de 4,4.
+
+Ces résultats montrent clairement que les variables ont des variances et des échelles différentes, justifiant pleinement la nécessité d'une mise à l'échelle avant de procéder à l'ACP.
+
+### ACP sur les variables
+
+
+
+
+```{r}
+res_pca = PCA(t(data), scale.unit = T, grap=T)
+```
+
+### Clustering
+
+
+## K-means
+```{r}
+data_t = as.data.frame(t(data))
+
+kgene=kmeans(data_t,centers=3)
+fviz_cluster(kgene,data=data_t,ellipse.type="norm",labelsize=8,geom=c("point","text"))+ggtitle("")
+table(kgene$cluster)
+#on les colorie avec les classes de kmeans
+fviz_pca_ind(res_pca,col.ind=as.factor(kgene$cluster),geom=c("point","text"),axes=c(1,2))
+kgene$cluster
+```
+```{r}
+#choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(data_t),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(data_t,centers=k,nstart=10)
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+ylab("Inertie intraclasse")
+```
+```{r}
+Silhou<-NULL
+Kmax<-15
+for (k in 2:Kmax){
+   print(k-1)
+   aux<-silhouette(reskmeanscl[,k-1], daisy(data_t))
+   Silhou<-c(Silhou, mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+```
+
+
+```{r}
+aux<-silhouette(reskmeanscl[,1], daisy(data_t))
+fviz_silhouette(aux)+theme(plot.title = element_text(size =9))
+rm(df,Silhou,aux)
+aux<-silhouette(reskmeanscl[,2], daisy(data_t))
+fviz_silhouette(aux)+theme(plot.title = element_text(size =9))
+rm(df,Silhou,aux)
+
+```
+```{r}
+Kmax<-15
+CH <- NULL
+for (k in 2:Kmax){
+  CH<-c(CH,index.G1(data_t, reskmeanscl[, k-1]))
+}
+daux<-data.frame(NbClust=2:Kmax,CH=CH)
+ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
+```
+```{r}
+
+kgene2=kmeans(data_t,centers=2)
+fviz_cluster(kgene2,data=data_t,ellipse.type="norm",labelsize=8,geom=c("point","text"))+ggtitle("")
+table(kgene2$cluster)
+#on les colorie avec les classes de kmeans
+fviz_pca_ind(res_pca, col.ind=as.factor(kgene2$cluster),geom=c("point","text"),axes=c(1,2))
+kgene2$cluster
+```
+Clustring à trois classes -> une classe deu clustering à 2 classes est scindée en deux donc on peut garder 3 classes même si silouhette et Calinski nous conseillent 2 classes.
+
+
+
+## CAH
+
+Dans cette section, nous utiliserons un autre algorithme de classification non supervisée pour vérifier si les résultats obtenus sont similaires à ceux précédemment observés avec l'algorithme de **k-means**. Il s'agit du **Classification Ascendante Hiérarchique (CAH)**, où l'objectif est d'identifier un saut significatif dans la hauteur du dendrogramme. Différents types de liens peuvent être utilisés : simple, complet, moyen et Ward. Nous constatons que le lien simple produit 4 classes homogènes, tandis que les autres types de liens génèrent 3 clusters, correspondant au même nombre de classes observé grâce à l'ACP. Par exemple, avec le lien complet, en coupant à une hauteur de 70, nous obtenons 3 classes. On observe qu'un cluster regroupe l'expression du gène à 3h et 2h. Un autre cluster rassemble l'expression du gène à 6h, 5h et 4h. Enfin, le dernier cluster contient principalement l'expression du gène à 1h, avec une légère présence des autres heures.
+
+```{r}
+d<-dist(data_t,method="euclidian")
+hclustsingle<-hclust(d,method="single")
+hclustcomplete<-hclust(d,method = "complete")
+hclustaverage<-hclust(d,method="average")
+hward<-hclust(d,method="ward.D2")
+
+fviz_dend(hclustsingle,show_labels=TRUE,k=3,kcolors=TRUE)
+fviz_dend(hclustcomplete,show_labels=TRUE,k=3,kcolors=TRUE)
+fviz_dend(hclustaverage,show_labels=TRUE,k=3,kcolors=TRUE)
+fviz_dend(hward,show_labels=TRUE,k=3,kcolors=TRUE)
+
+#Ward
+ClustCH<-cutree(hward,k=3,h=180)
+table(ClustCH)
+ClustCH
+
+#Moyenne
+ClustCH2<-cutree(hclustaverage,k=3,h=20)
+table(ClustCH2)
+ClustCH2
+
+#complet
+ClustCH3<-cutree(hclustcomplete,k=3,h=80)
+table(ClustCH3)
+ClustCH3
+
+#single
+ClustCH4<-cutree(hclustsingle,k=3,h=180)
+table(ClustCH4)
+ClustCH4
+```
+
+
+```{r}
+#le nombre de classes à retenir avec l'indice de Calinski-Harabasz
+CH<-NULL
+Kmax<-20
+for (k in 2:Kmax){
+
+  CH<-c(CH,index.G1(data_t,cl=cutree(hward,k)))
+}
+daux<-data.frame(NbClust=2:Kmax,CH=CH)
+ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
+```
+
+
+```{r}
+#marche pas
+#le nombre de classes à retenir avec le critère Silhouette
+#CH2<-NULL
+#Kmax<-20
+#for (k in 2:Kmax){
+ # CH2<-c(CH2,index.S(data_t,d=d,cl=cutree(hward,k)))
+#}
+#daux<-data.frame(NbClust=2:Kmax,CH=CH)
+#ggplot(daux,aes(x=NbClust,y=CH2))+geom_line()+geom_point()
+```
+## Comparison avec la classification obtenue avec la méthode des Kmeans 
+
+On remarque que la classification obtenue avec k-means est identique à celle de la CAH avec le lien **ward**. Cependant, les classes 1, 2 et 3 identifiées par k-means correspondent respectivement aux classes 3, 1 et 2 de la CAH.
+```{r,eval=F}
+
+#table(kgene$cluster,cutree(hclustaverage,3))
+table(kgene$cluster,ClustCH)
+table(kgene$cluster,ClustCH2)
+table(kgene$cluster,ClustCH3)
+table(kgene$cluster,ClustCH4)
+
+#à vérifier bizarre d'avoir avec des liens différents la meme classification
+```
+
+D'après la représentation des individus obtenue par l'ACP, il apparaît qu'il existe trois classes homogènes. Pour confirmer cette observation, nous allons utiliser un modèle de classification non supervisée. À cette fin, nous opterons pour l'algorithme de `k-means`, car nous connaissons le nombre de classes. C'est un algorithme est largement utilisé et connu par sa rapidité et de sa capacité à former des classes bien séparées.
+
+#### Représentaion des individus
+
+D'après la figure, on distingue clairement trois groupes d'individus. Pour valider cette observation, nous procédons à une analyse de clustering.
+
+
+#### Représentaion des variables
+Étant donné le grand nombre d'individus, le cercle de corrélation initial s'est révélé difficile à interpréter. Pour cela, nous avons opté pour un échantillonnage aléatoire. Après plusieurs essais avec des échantillons aléatoires de 15 individus, nous avons obtenu la figure ci-dessous en fixant la graine à 21.
+
+On observe que les individus sont bien projetés (flèches de module proche de 1) dans le nouvel espace à dimension réduite. Le premier axe est positivement corrélé de manière significative avec les individus G424, G1659, et G161, et négativement corrélé avec G368, G394, et G1650. Ces gènes jouent donc un rôle important dans la construction du premier facteur.
+
+Concernant l'axe 2, il est positivement corrélé avec G175 et négativement corrélé avec G465. Ces relations mettent en évidence les contributions spécifiques des individus à la construction de ce second facteur.
+
+```{r,fig.cap="\\label{fig:corrplot}Interprétation de l'axe 1",fig.height=3}
+set.seed(21)
+data_t = as.data.frame(t(data))
+rand_var = sample(colnames(data_t),15)
+fviz_pca_var(res_pca, select.var = list(name=rand_var, cos2=NULL, contrib=NULL))
+
+```
+
+
+```{r,fig.cap="\\label{fig:corrplot}Interprétation de l'axe 2",fig.height=3}
+
+#31 32 36 40 23 62
+set.seed(62)
+rand_var = sample(colnames(data_t),15)
+fviz_pca_var(res_pca, select.var = list(name=rand_var, cos2=NULL, contrib=NULL))
+
+```
+
+
+
+
+
+```{r}
+res_pca$eig
+round(res_pca$ind$coord,2)
+
+```
+
+
+Chaque ligne du tableau représente une variable virtuelle appelée "facteur" ou encore "composante principale". Une composante principale est une combinaison linéaire des variables initiales. La colonne eigenvalue indique la variance associée à chaque facteur, chaque valeur propre représentant la variance expliquée par le facteur correspondant. Ensuite, la colonne cumulative percentage of variance qui représente le pourcentage de la variance expliquée par chaque facteur par rapport au total.
+
+```{r}
+fviz_eig(res_pca)
+fviz_contrib(res_pca, choice="ind")
+fviz_pca_ind(res_pca)
+
+
+# geom choix des var
+# contrib = -> sueil
+# tracer un corrplot de correlation
+# repeal = T
+# police
+```
+
+
+### ACP sur les individus
+
+Dans cette section, on va effectuer une nouvelle ACP, en inversant les rôles : cette fois, les individus sont considérés comme des variables, et les variables initiales deviennent les individus.
+ 
+```{r}
+res_pca_ind = PCA(data, scale.unit = T, grap=F)
+
+set.seed(120)
+random_individuals <- sample(rownames(data), 15)
+
+fviz_pca_ind(res_pca_ind, select.ind = list(name = random_individuals, cos2 = NULL, contrib = NULL), title = "ACP sur un échantillon aléatoire de 50 individus")
+
+fviz_pca_ind(res_pca_ind, select.ind = list(contrib = 15), title = "ACP sur les individus qui contribuent le plus : mise en évidence d'outliers", repel = T)
+
+fviz_pca_var(res_pca_ind, select.var = list(contrib = 10), title  = "ACP des variables qui contribuent le plus")
+
+
+
+```
+```{r}
+res_pca2 = PCA(data, scale.unit = T, grap=T)
+
+```
+
+### Clustering
+
+## K-means
+
+En réalisant Kmeans, on remarque que les données peuvent se séparer parfaitement en 2 clusters selon l'axe 2 obtenu par la nouvelle ACP. 
+
+```{r}
+
+
+kgene2=kmeans(data,centers=2, nstart=10)
+#kgene
+fviz_cluster(kgene2,data=data,ellipse.type="norm",labelsize=8,geom=c("point","text"))+ggtitle("")#regarder les effectifs par classes (on peut ne pas avoir le meme clusters à chaque fois)
+table(kgene2$cluster)
+#on les colorie avec les classes de kmeans
+fviz_pca_ind(res_pca_ind,col.ind=as.factor(kgene2$cluster),geom=c("point"),axes=c(1,2))
+```
+
+```{r}
+#choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(data),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(data, centers=k,nstart=10)
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+ylab("Inertie intraclasse")
+```
+
+
+```{r}
+Silhou<-NULL
+Kmax<-15
+for (k in 2:Kmax){
+   aux<-silhouette(reskmeanscl[,k-1], daisy(data))
+   Silhou<-c(Silhou, mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+```
+
+
+```{r}
+aux<-silhouette(reskmeanscl[,1], daisy(data))
+fviz_silhouette(aux)+theme(plot.title = element_text(size =9))
+rm(df,Silhou,aux)
+```
+
+```{r}
+Kmax<-15
+CH <- NULL
+for (k in 2:Kmax){
+  CH<-c(CH,index.G1(data, reskmeanscl[, k-1]))
+}
+daux<-data.frame(NbClust=2:Kmax,CH=CH)
+ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
+```
+
+
+## Récupérer sur /sous / non exprimés:
+```{r}
+#first_ind = as.data.frame(data[1:2, ])
+#head(first_ind)
+
+mean_replicat <- function(data){
+  
+  # Moyenne des replicats
+  for (j in 1:18){
+    data[, j] = (data[, j] + data[, j+18]) / 2
+    m = length(colnames(data)[j])
+    colnames(data)[j] = substr(colnames(data)[j], 1, nchar(colnames(data)[j]) - 3)
+  }
+  data = data[, 1:18]
+  return(data)
+}
+data_mean = mean_replicat(data)
+
+get_code = function(data){
+  # 1-> sur
+  # 0 -> sous
+  # 2 -> non exprimé
+  data_m = mean_replicat(data)
+  
+  code = rep(2, nrow(data_m))
+  
+  code[data_m$T3_6h < -1] = 0
+  code[data_m$T3_6h > 1] = 1
+  code = as.factor(code)
+  return(code)
+}
+
+#mean_replicat(first_ind)
+code <- get_code(data)
+summary(code)
+```
+
+
+```{r}
+table(kgene2$cluster, code)
+adjustedRandIndex(kgene2$cluster, code)
+```
+Le clustering kmeans à 2 classes correspond au caractère sur / sous exprimé (1 pour sous et 2 pour sur)
+
+## CAH
+
+```{r}
+#d2<-dist(data,method="euclidian")
+#hclustsingle2<-hclust(d2,method="single")
+#hclustcomplete2<-hclust(d2,method = "complete")
+#hclustaverage2<-hclust(d2,method="average")
+#hward2<-hclust(d2,method="ward.D2")
+
+#fviz_dend(hclustsingle2,show_labels=TRUE,k=3,kcolors=TRUE)
+#fviz_dend(hclustcomplete2,show_labels=TRUE,k=3,kcolors=TRUE)
+#fviz_dend(hclustaverage2,show_labels=TRUE,k=3,kcolors=TRUE)
+#fviz_dend(hward2,show_labels=TRUE,k=3,kcolors=TRUE)
+```
+
+Dans cette nouvelle ACP, on va retenir les quatre premiers axes, ce qui permet de résumer plus de 84 % de l'information initiale.
+
+```{r}
+res_pca_ind$eig
+```
+
+```{r}
+fviz_eig(res_pca_ind)
+fviz_contrib(res_pca_ind, choice="ind")
+fviz_contrib(res_pca_ind, choice="var", axes = 1)
+fviz_contrib(res_pca_ind, choice="var", axes = 2)
+# geom choix des var
+# contrib = -> sueil
+# tracer un corrplot de correlation
+# repeal = T
+# police
+```
+```{r}
+corrplot(t(res_pca_ind$var$cor))
+
+
+# qt 1 organisation des var -> ACP des variavbles
+```
+
+## ANCOVA
+
+Dans cette section, nous allons modifier le jeu de données en nous focalisant sur la moyenne des deux réplicats. Pour commencer, nous préparerons le nouveau jeu de données en créant une fonction intitulée `preparer`. Le résultat final se compose de quatre colonnes : trois variables quantitatives représentant l'expression des gènes observée à 1h, 6h, et 3h qui sera utilisée ultérieurement, ainsi qu'une variable qualitative avec trois modalités.
+
+```{r}
+
+
+mean_replicat <- function(data){
+  
+  # Moyenne des replicats
+  for (j in 1:18){
+    data[, j] = (data[, j] + data[, j+18]) / 2
+    m = length(colnames(data)[j])
+    colnames(data)[j] = substr(colnames(data)[j], 1, nchar(colnames(data)[j]) - 3)
+  }
+  data = data[, 1:18]
+  return(data)
+}
+data_mean = mean_replicat(data)
+
+preparer = function(data){
+
+  data_m = mean_replicat(data)
+  
+  new = data.frame("h6", "h1", "T")
+  n_indiv = nrow(data)
+  matrix_T1 = cbind(data_m$T1_1h, data_m$T1_3h, data_m$T1_6h, rep(1, n_indiv))
+  matrix_T2 = cbind(data_m$T2_1h, data_m$T2_3h, data_m$T2_6h, rep(2, n_indiv))
+  matrix_T3 = cbind(data_m$T3_1h, data_m$T3_3h, data_m$T3_6h, rep(3, n_indiv))
+  
+  matrix = rbind(matrix_T1, matrix_T2, matrix_T3)
+  
+  data_final = data.frame(h1 = matrix[, 1], h3 = matrix[, 2], h6 = matrix[, 3], t = matrix[, 4])
+  data_final$t = as.factor(data_final$t)
+  return(data_final)
+}
+
+#mean_replicat(first_ind)
+data_ancova = preparer(data)
+head(data_ancova)
+
+```
+### L'expression des gènes à 6h à partir de celle observée à 1h
+
+L'objectif est de prédire une variable quantitative, à savoir l'expression des gènes à 6 heures, à partir d'une autre variable quantitative, l'expression observée à 1 heure, ainsi qu'une variable qualitative correspondant au traitement appliqué. Pour ce faire, nous utiliserons un modèle `ANCOVA avec interaction`. Il existe 2 versions pour écrire notre modèle : 
+
+On cherche à représentéer les données sur un même graphique afin de visualiser la relation éventuelle entre Y,z et T. Il s’agit de tracer un nuage de points de coordonnées (zij,Yij), où tous les points du niveau i, i=1,2,3, sont représentés par le même symbole
+
+Figure 1: Graphique de l'expression des gènes à 6h par rapport à celle observée à 1h selon chaque traitement 
+Figure 2: Graphique de l'expression des gènes à 6h par rapport à celle observée à 3h selon chaque traitement 
+Figure 3: Evolution de l'expression des gènes à 6h et à 1h pour chaque traitement
+```{r}
+ggplot(data_ancova,aes(x=h1,y=h6))+ 
+  geom_point(aes(shape=t,col=t))
+
+ind = which(data_ancova$t == 1)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6)) + geom_point()
+
+ind = which(data_ancova$t == 2)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6)) + geom_point()
+
+ind = which(data_ancova$t == 3)
+df = data.frame(h1=data_ancova$h1[ind], h6=data_ancova$h6[ind])
+ggplot(df,aes(x=h1,y=h6))+ geom_point()
+
+ggplot(data_ancova,aes(x=t,y=h6)) + geom_boxplot(aes(shape=t,col=t))
+
+```
+
+
+
+
+
+#### Version singulière
+
+
+
+```{r}
+complet = lm(h6~h1*t, data=data_ancova)
+summary(complet)
+
+```
+
+#### Version regulière
+On peut observer graphiquement l'ajustement des droites de régression aux données. Il est évident que ces droites ne sont pas parallèles, ce qui indique un effet d'interaction. Cela justifie l'utilisation d'un modèle ANCOVA avec interaction.
+
+```{r}
+complet_reg = lm(h6~-1 + t + t:h1, data=data_ancova)
+summary(complet_reg)
+```
+
+
+```{r}
+ggplot(data_ancova, aes(x=h1,y=h6, shape=t,col=t))+ 
+  geom_point()+
+  geom_smooth(method='lm',se=T) 
+
+# -> interaction h1:t ?
+# -> même coefficients t2 t3
+```
+
+
+
+```{r}
+mod.add = lm(h1 ~ h6 + t, data_ancova)
+anova(complet_reg,  mod.add)
+```
+
+### L'expression des gènes à 6h à partir de celle observée à 3h
+
+```{r}
+
+
+ggplot(data_ancova, aes(x=h3,y=h6, shape=t,col=t))+ 
+  geom_point()+
+  geom_smooth(method='lm',se=T)
+
+complet_reg = lm(h6~-1 + t + t:h3, data=data_ancova)
+summary(complet_reg)
+```
+
+### Interprétation
+Le coefficient \( R^2 \) mesure la qualité de l'ajustement du modèle. Plus \( R^2 \) est proche de 1, meilleur est l'ajustement. Dans le cas ou on cherche à expliquer l'expression des gènes à 6h par rapport à celle observée à 1h, \( R^2 \) ajusté est égal à 0,272. Cela signifie que le modèle n'explique que 27 % de la variabilité des données, ce qui est relativement faible.
+
+Lorsqu'on cherche à expliquer l'expression des gènes à 6h en fonction de celle observée à 3h, on obtient un meilleur ajustement, avec un \( R^2 \) de 0,7713. Cet ajustement est supérieur à celui basé sur l'expression des gènes à 1h, ce qui est logique puisque 3h est chronologiquement plus proche de 6h que 1h.
+
+## Sélction de variables
+```{r}
+complet = lm(T3_6h ~., data=data_mean)
+summary(complet)
+# Il y a des vcariables non significatives donc on peut faire une selection
+# Les plus significatives sont l'heure d'avant pour T3 et le traitement 2 à 6h car les traitement 2 et 3 se ressemblent beaucoup.
+```
+On observe que certaines variables ont un effet non significatif. En effet, selon les résultats de l'analyse R, les tests de nullité ou de Student effectués indépendamment produisent des p-valeurs relativement faibles, notamment pour T1_3h, T3_5h et autres . Il semble donc possible de simplifier le modèle initial. Pour cela, nous allons adopter une procédure de sélection des variables explicatives basée sur plusieurs critères : Cp, BIC, adjr2 et enfin AIC. Afin de tester l'admissibilité des sous-modéles choisi par chaque critére, nous effectuerons des test de Fisher qui corrspond à chaque sous-modèle choisi par chaque critére.
+
+```{r}
+library(leaps)
+choix = regsubsets(T3_6h~., data=data_mean, method="backward", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+```
+
+
+```{r}
+choix = regsubsets(T3_6h~., data=data_mean, method="forward", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+```
+
+
+```{r}
+choix = regsubsets(T3_6h~., data=data_mean, method="seqrep", nbest=1, nvmax=18)
+plot(choix, scale="Cp")
+plot(choix, scale="bic")
+plot(choix, scale="adjr2")
+
+# Les valeurs sont très proches donc c'est interresant de tester des modèle parcimonieux qui sont pas le meilleur.
+```
+
+
+```{r}
+model_selected = step(complet, direction="both") #AIC
+summary
+```
+
+On remarque que Cp et AIC choississent les 3 même variable en à retirer: T1_1h, T2_4h et T3_2h. On retient donc ce modéle par la suite: T3_6h ~ T1_1h + T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + T2_1h + 
+    T2_2h + T2_3h + T2_4h + T2_5h + T2_6h + T3_1h + T3_2h + T3_3h + 
+    T3_4h + T3_5h
+```{r}
+
+test = anova(complet, model_selected)
+test
+```
+
+On constate que les critères Cp et AIC sélectionnent les mêmes trois variables à retirer : T1_1h, T2_4h et T3_2h. Par conséquent, nous retenons le modèle suivant : 
+
+\[ T3_6h \sim T1_1h + T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + T2_1h + T2_2h + T2_3h + T2_4h + T2_5h + T2_6h + T3_1h + T3_2h + T3_3h + T3_4h + T3_5h \]
+    
+
+```{r}
+# Les autres critères ne sont pas si sûr -> peu d'écarts entre les valeurs 
+
+# Plus partimonieux à 10000 de bic
+model_bic = lm(T3_6h~T1_5h + T1_6h + T2_5h + T2_6h + T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+
+#premier bic
+model_bic = lm(T3_6h~T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + 
+    T2_1h + T2_2h + T2_3h + T2_5h + T2_6h + T3_1h + 
+    T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+
+#3ème meilleur r2adj avec une valeur proche du meilleur
+model_bic = lm(T3_6h~T1_2h + T1_3h + T1_4h + T1_5h + T1_6h + 
+    T2_1h + T2_2h + T2_3h + T2_5h + T2_6h + T3_1h + T3_4h +
+    T3_5h, data=data_mean)
+anova(model_bic, complet) # Pas accepté
+```
+En réalisant des tests de Fisher sur les sous-modèles sélectionnés à l'aide des critères BIC, comparés au modèle complet, nous obtenons des p-valeurs inférieures à 0,05. Ainsi, au risque 5%, nous rejetons les sous-modèles.
+
+
+
+```{r}
+tildeY=scale(data_mean$T3_6h,center=T,scale=T)
+tildeX=scale(data_mean[, -18],center=T,scale=T)
+```
+
+```{r}
+library(glmnet)
+lambda_seq<-10^(seq(-4,4,0.01))
+fitlasso <- glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c("gaussian"), intercept = F) # A COMPLETER
+summary(fitlasso)
+```
+
+2. Tracez le chemin de régularisation de chacune des variables et commentez
+
+```{r,eval=F}
+df=data.frame(lambda = rep(fitlasso$lambda,ncol(tildeX)), theta=as.vector(t(fitlasso$beta)),variable=rep(colnames(tildeX),each=length(fitlasso$lambda)))
+g3 = ggplot(df,aes(x=lambda,y=theta,col=variable))+
+  geom_line()+
+  theme(legend.position="bottom")+
+  scale_x_log10()
+ggplotly(g3)
+```
+
+3. A l'aide de la fonction `cv.glmnet()` mettez en place une validation croisée pour sélectionner le "meilleur" $\lambda$ par MSE. En pratique, il est préconisé d'utilisé `lambda.1se` (la plus grande valeur de $\lambda$ telle que l'erreur standard se situe à moins de 1 de celle du minimum).  
+
+```{r,eval=F}
+lasso_cv <- cv.glmnet(tildeX, tildeY, alpha = 1, lambda = lambda_seq, family = c("gaussian"), intercept = F) # A COMPLETER
+best_lambda <-lasso_cv$lambda.min
+lambda1se <- lasso_cv$lambda.1se
+lasso_cv$lambda.min
+```
+
+La valeur de $\lambda$ sélectionnée vaut 0.02884032
+
+```{r,eval=F}
+g3=g3 + 
+  geom_vline(xintercept = best_lambda,linetype="dotted", color = "red")+
+  geom_vline(xintercept = lambda1se,linetype="dotted", color = "blue")+
+  scale_x_log10()
+g3
+
+```
+
