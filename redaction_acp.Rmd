@@ -1,0 +1,358 @@
+---
+title: "interpretation_acp"
+output: pdf_document
+date: "2025-01-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+library(mclust)
+library(clusterSim)
+library(ggplot2)
+library(circlize)
+library(viridis)
+
+set.seed(13)
+```
+
+# Étude du jeu de donnée dans un espace de faible dimension
+
+## Principe de l'ACP
+
+On observe n individus décrit par p variables **quantitatives**. 
+On souhaite obtenir une représentation de ces individus dans un espace de faible dimension.
+
+On peut utiliser une ACP (analyse en composantes principales).
+
+Pour cela, on centre (et réduit si besoin les variables).
+Ensuite, on cherche les vecteurs qui maximisent l'inertie de la projection des données sur ces vecteurs
+Ces vecteurs sont les vecteurs propres associés aux plus grandes valeurs propres de la matrice de covariance des données. Ce sont les axes principaux de notre ACP.
+
+Dans notre cas il ne faut pas centrer les données car nos variables sont toutes exprimées dans la même unité.
+
+## ACP avec les gènes comme individus 
+
+On analyse le jeu de donnée avec les gènes comme individus. On travaille donc avec 1615 individus et 36 variables.
+Comme l'axe j de l'acp correspond au pourcentage de l'inertie $\frac{\lambda_j}{\sum_{i=1}^p \lambda_i}$ (avec p le nombre de variables), on doit choisir le nombre de composantes principales suffisant pour couvrir $80%$ de l'inertie.
+
+```{r, echo=FALSE}
+data <-read.table("DataProjet4modIA-2425.txt",header=T)
+acp.ind = PCA(data, scale.unit = F, graph = F)
+```
+
+
+On observe que le premier axe seul comprend $88.5%$. Il serait donc suffisant d'observer les données dans le premier plan factoriel mais nous avons choisit de tout de même utiliser l'axe 3 car il nous servira pour les interpretations.
+Avec ces 3 axes, nous avons un pourcentage d'inertie cumulée de $94.8%$
+```{r}
+acp.ind$eig[3, 3]
+```
+
+### Interprétation avec l'expression des gènes
+
+Pour analyser correctement le premier plan factoriel, nous avons créé les variables qualitatives correspondant aux caractères sur-exprimé / sous-exprimé / non-exprimé pour la moyenne des replicat et pour un traitement et une heure donnée. (*)
+
+Nous avons donné les codes -1, 0, 1 respectivement pour les caractères non-exprimé, sous_exprimé, sur_exprimé.
+
+```{r, echo=FALSE}
+mean_replicat <- function(data){
+  
+  # Moyenne des replicats
+  for (j in 1:18){
+    data[, j] = (data[, j] + data[, j+18]) / 2
+    m = length(colnames(data)[j])
+    colnames(data)[j] = substr(colnames(data)[j], 1, nchar(colnames(data)[j]) - 3)
+  }
+  data = data[, 1:18]
+  return(data)
+}
+
+data_mean = mean_replicat(data)
+
+get_code = function(variable){
+  # 1-> sur
+  # 0 -> sous
+  # -1 -> non exprimé
+  
+  code = rep(-1, length(variable))
+  
+  code[variable < -1] = 0
+  code[variable > 1] = 1
+  code = as.factor(code)
+  return(code)
+}
+
+code.T1_6h = get_code(data_mean$T1_6h)
+code.T2_6h = get_code(data_mean$T2_6h)
+code.T3_6h = get_code(data_mean$T3_6h)
+
+code.T1_1h = get_code(data_mean$T1_1h)
+code.T2_1h = get_code(data_mean$T2_1h)
+code.T3_1h = get_code(data_mean$T3_1h)
+
+code.T1_3h = get_code(data_mean$T1_3h)
+code.T2_3h = get_code(data_mean$T2_3h)
+code.T3_3h = get_code(data_mean$T3_3h)
+
+
+code.T1_6h_R1 = get_code(data$T1_6h_R1)
+code.T2_6h_R1 = get_code(data$T1_6h_R1)
+code.T3_6h_R1 = get_code(data$T1_6h_R1)
+
+code.T1_6h_R2 = get_code(data$T1_6h_R2)
+code.T2_6h_R2 = get_code(data$T1_6h_R2)
+code.T3_6h_R2 = get_code(data$T1_6h_R2)
+```
+
+Ces variables sont intéressantes lorsqu'on les prend à 6h car elle represente l'expression des gène à la fin de l'experience.
+
+Ce qu'on peut remarquer c'est que le caractère sur/sous/non-exprimé des gènes est comparables entre les traitements T2 et T3. Pour le traitement T1, on observe une difference sigificative avec les autres traitement étant donné que la plupart des gène sont non-exprimés quelque soit l'heure.
+
+Pour faire cette observation, nous nous sommes appuyés sur la table de contingence entre ces variables et l'indice de Rand ajusté (un mesure de similarité entre deux variable qualitatives).
+
+Cette première table de contingence montre que pour le traitement T1, la plupart des individus sont à non exprimé. De plus on voit que le traitement ne partage pas souvent ses modalités avec le caractère sur/sous/non-exprimé des gènes pour le traitement T2. Ceci est confirmé avec l'indice de Rand ajusté qui est proche de zéro.
+```{r}
+table(code.T1_6h, code.T2_6h)
+adjustedRandIndex(code.T1_6h, code.T2_6h)
+```
+
+A l'inverse, les caractères sur/sous/non-exprimé des gènes pour les traitements T2 et T3 prennent souvent leurs modalité pour les mêmes individus.
+
+```{r}
+table(code.T3_6h, code.T2_6h)
+adjustedRandIndex(code.T3_6h, code.T2_6h)
+```
+
+### Interpretation du premier axe de l'ACP
+Lorsqu'on represente le caractére sur/sous/non-exprimé des gènes à 6h pour le traitement T3, on observe que le premier axes de l'ACP sépare bien les modalités de cette variable.
+
+```{r}
+fviz_pca_ind(acp.ind, geom = c("point"), habillage=code.T3_6h, axes=c(1, 2), legend.title="expression T3 6h")
+```
+En effet, on observe à gauche les individus sous-exprimés, au centre les individus non-exprimés et à droite les individus sur-exprimé.
+Nous en concluons donc que l'axe 1 de l'ACP correspond à l'expression des gènes pour les traitements T2 et T3 (étant donné que l'expression pour le traitement T2 est comparable à l'expression pour le traitement T3).
+
+
+### Interpretation du 3ème axe de l'ACP
+
+Le 3ème axe de l'ACP separe bien les modalités du caractère sous/sur/non-exprimé des gène pour le traitement T1 à l'heure 1. On a les individus sur-exprimés en haut, les individus non exprimés au milieu et les individus sous exrimés en bas.
+Il semble donc lié à l'expression des gènes pour le traitement 1.
+
+```{r}
+fviz_pca_ind(acp.ind, geom = c("point"), habillage=code.T1_6h, axes=c(1, 3), legend.title="expression T1 6h")
+```
+
+## Interpretation du cercle des correlations
+
+Le cercle des correlation represente la correlation entre les composantes principales (avec un coefficients de normalisation) et les variables de l'ACP. Il permet d'interpreter les axes de l'ACP.
+
+Pour nous aider nous avons créé 3 variables qualitatives qui indiquent l'heure, le replicat et le traitement associés à chaque variables (*).
+
+```{r}
+traitements = as.factor(substr(colnames(data), 2, 2))
+heures = as.factor(substr(colnames(data), 4, 4))
+replicats = as.factor(substr(colnames(data), 8, 8))
+```
+
+En utilisant ces couleurs, on observe que l'axe deux semble representer l'évolution de l'expression des gènes dans le temps. En effet, la seconde composante principale est corrélé positivement avec les variables qui correspondent heures petites (1h, 2h, 3h et 4h) ou les gène ne se sont pas encore exprimés. Elle est corrélée négativement avec les variables qui correspondent aux heures éleves (5h et 6h) où l'expression des gènes s'est faite.
+
+```{r}
+fviz_pca_var(acp.ind, col.var=heures, axes=c(1, 2), legend.title="heure")
+```
+
+De plus, on remarque à nouveau que l'axe 1 represente l'expression des gènes pour le traitement 2 et 3. En effet la première composante principale est fortement corrélé (négativement et positivement) avec les variables qui correspondent au traitements 2 et 3 mais trés peu avec les variables qui correspondent au traitement 1.
+
+```{r}
+fviz_pca_var(acp.ind, col.var=traitements, axes=c(1, 2), legend.title="traitement")
+```
+
+## ACP des variables 
+
+On analyse le jeu de donnée avec les variables comme individus. On possède donc 1615 variables et 36 individus.
+Deux axes sont suffisants pour obtenir $87%$ de l'inertie.
+
+```{r}
+acp.var = PCA(t(data), scale.unit = F, graph = F)
+acp.var$eig[2, 3]
+```
+
+### Analyse du premier plan factoriel.
+
+On projette les variables dans le premier plan factoriel et on colore selon le traitement et l'heure associés à ces variables.
+
+```{r}
+fviz_pca_ind(acp.var, habillage=traitements, axes=c(1, 2), legend.title="traitement")
+fviz_pca_ind(acp.var, habillage=heures, axes=c(1, 2), legend.title="heure")
+```
+#### Analyse de l'axe 1
+On observe que les variables associées au traitement 1 sont toutes concentrées à doite dans la projection. Ce sont des variables qui corresponde à peu d'expression des gènes.
+Les variables des traitement 2 et 3 sont réparties à droite et à gauche dans la projection. Elle sont ordonées selon l'heure croissante de depuis le centre vers le gauche. Comme l'expression des gènes augmente avec le temps, plus l'heure est élevée plus l'expression des gènes est importante. 
+
+En conclusion, les variables sont ordonées sur l'axe 1 des variables ou les gènes s'exprime le moins à droite aux variables ou les gènes s'exprime le plus. Cet axe représente donc le niveau d'expression des gènes.
+
+#### Analyse de l'axe 2.
+Les modalités de la variable qualitative heure qui aux variables associe l'heure qu'elle represente est bien séparée par l'axe 2 de l'acp. De plus les heures de 2 à 6 sont disposées dans l'ordre croissante du haut vers le bas de l'axe. L'axe 2 semble donc lié à une notion de temporalité avec en haut les petites heures et en bas les heures élevées.
+
+### Cercle de corrélation
+
+Notre observation sur l'axe un est verifiée par le cercle des corrélation étant donné qu'il est corrélé positivement avec les gènes qui sont non-exprimés pour le traitement T3 à 6h et il est negativement corrélé aux gènes qui sont sur-exprimés dans ces même conditions.
+
+On retrouve à nouveau qu'il represente le niveau d'expression des gènes dans les variables, des variables dans lesquelles les gènes s'expriment le plus au variables ou les gène s'expriment le moins. 
+
+```{r}
+fviz_pca_var(acp.var, col.var=code.T3_6h, axes=c(1, 2), legend.title="Traitement", geom="point")
+```
+
+
+# Clustering des gènes
+
+On travaille avec les gènes comme individus, nous avons donc 36 variables. Pour ne pas risquer de se tromper dans nos clusterings à cause de petites variations qui s'accumulent sur les variables et peuvent fausser nos résultats on va travailler sur les résultats des clusterings.
+Un autre avantages c'est que les résultats seront plus rapides sans qu'on perdent en rapidité de calculs, et on aura plus de possibilités de modèles pour les mélanges gaussiens.
+
+Nous avons choisit de travailler avec les 5 composantes principales ce qui représente plus de 95% de l'inertie.
+
+```{r}
+acp.ind$eig[5, 3]
+```
+
+## K-means
+
+Pour chosir le nombre de classes du clustering avec les k-means, nous avons mit en competition les critères silhouette et Calinski-Harabasz et le choix fait avec le coude de l'inertie intra-classes (*)
+
+```{r, echo=False}
+data = acp.ind$ind$coord[, 1:5]
+
+#choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(data),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(data, centers=k,nstart=10)
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+ylab("Inertie intraclasse")
+
+# On trouve un coude autour de 4 classes
+```
+
+```{r, echo=False}
+Silhou<-NULL
+Kmax<-15
+for (k in 2:Kmax){
+   aux<-silhouette(reskmeanscl[,k-1], daisy(data))
+   Silhou<-c(Silhou, mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+# On trouve un pic à 2 classes 
+```
+
+```{r, echo=False}
+Kmax<-15
+CH <- NULL
+for (k in 2:Kmax){
+  CH<-c(CH,index.G1(data, reskmeanscl[, k-1]))
+}
+daux<-data.frame(NbClust=2:Kmax,CH=CH)
+ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
+#Pic à deux classes
+```
+
+
+## Choix de Silhouette et Calinski-Harabasz
+
+Les critères de silhouette et Calinski-Harabasz choisissent un nombre de classes de 2. 
+
+Lorsqu'on affiche les clusterings dans le premier plan factoriel, on observe que les clustering se distinguent bien et coincides avec le caractère sur-exprimé / non-exprimé des gènes.
+
+
+```{r}
+kmeans.ind2 = as.factor(reskmeanscl[, 1])
+fviz_pca_ind(acp.ind, habillage=kmeans.ind2,geom=c("point"),axes=c(1,2), legend.title="kmeans 2 classes")
+```
+Cette correspondence peut être mise en valeur avec une table de contingence et l'indice de rand entre le clustering et la variable qualitative qui représente le caractère sur/sous/non-exprimé des gènes à 6h pour le traitement T3:
+
+```{r}
+table(code.T3_6h, kmeans.ind2)
+adjustedRandIndex(code.T3_6h, kmeans.ind2)
+```
+
+Avec un indice de Rand ajusté de 0.98, on peut conclure que se lien est important. La classe 1 du clustering correspond principalement aux gènes qui sont sous-exprimés et la classes 2 au gènes qui sont sur-exprimés et ce pour les traitements T2 et T3 à 6h.
+
+## Choix avec l'inertie intra-classes
+
+Le coude de l'inertie intra-classes se trouve aux alantours des 4 classes.
+
+En faisant une table de contingence et un indice de Rand ajusté, on se rend compte que le clustering obtenu est proche du clustering à 2 classes.
+
+```{r}
+kmeans.ind4 = as.factor(reskmeanscl[, 3])
+table(kmeans.ind2, kmeans.ind4)
+adjustedRandIndex(kmeans.ind2, kmeans.ind4)
+```
+On se rend compte que le clustering à 4 classes et obtenu en séprant en deux les classes du clustering à 2 classes.
+
+```{r}
+ggplot(data_m, aes(x=kmeans.ind4, y=T3_6h)) + geom_boxplot()
+```
+Comme pour le clustering à 2 classes, les clustering à 4 classes sépare les individus selon l'expression des gènes cependant il le fait en offrant 4 niveau d'expression differents : de la classe 1 à 4, les gènes sont regroupés par ordre croissant selon l'expression de leurs gènes.
+
+
+## Modèles de mélange gaussien
+
+Nous avons essayé les critères BIC et ICL mais les modèles obtenu n'était pas satisfaisant, il comportaient beaucoups de classes et nous avons eu du mal à bien les interpreter (*).
+
+```{r}
+clustBIC <- Mclust(acp.ind$ind$coord, G=2:15)
+summary(resBIC)
+```
+
+
+```{r}
+fviz_mclust(clustBIC, what=c("BIC"))
+Aux<-data.frame(label=as.factor(clustBIC$classification), proba=apply(clustBIC$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustBIC, ellipse.type="norm", data=data_t)
+```
+
+```{r}
+fviz_pca_ind(acp.ind, habillage=as.factor(clustBIC$classification), geom=c("point"), axes=c(1,2))
+```
+
+
+```{r}
+choixICL = mclustICL(acp.ind$ind$coord, G=2:15)
+```
+
+```{r}
+summary(choixICL)
+```
+
+```{r}
+clustICL = Mclust(acp.ind$ind$coord, G=8, modelNames="VVV")
+Aux<-data.frame(label=as.factor(clustICL$classification), proba=apply(clustICL$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustICL, ellipse.type="norm", data=data_t)
+fviz_pca_ind(acp.ind, habillage=as.factor(clustICL$classification), geom=c("point"), axes=c(1,2))
+```
+
+
+
+# Clustering des variables
+
+
+
+
+
+
+

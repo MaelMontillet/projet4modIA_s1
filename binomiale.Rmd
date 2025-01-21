@@ -1,6 +1,8 @@
 ---
 title: "binomiale"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 date: "2024-11-15"
 ---
 
@@ -119,3 +121,9 @@ rocobj1 <- roc(dtest$code, prev1)
 
 ggroc(list(complet=rocobj1))
 ```
+# Dernière question : test d'indépendence.
+
+
+
+
+

@@ -1,18 +1,18 @@
 ---
 title: "Projet AD et EMS"
 author: "Arthur Augusto, Montillet Mael et Chikhaoui Linda"
-institute : "INSA Toulouse / In7"
 date: "`r Sys.Date()`"
-#bibliography: "exbiblio.bib"
-#output: 
- # pdf_document :
-  #  toc : TRUE
-   # toc_depth : 2
-    #number_section : TRUE
+output: 
+  pdf_document :
+    toc : TRUE
+    toc_depth : 2
+    number_section : TRUE
+    latex_engine : xelatex
 header-includes:
    - \usepackage{dsfont}
    - \usepackage{color}
    - \newcommand{\1}{\mathds{1}}
+   - \DeclareUnicodeCharacter{2212}{\textendash}
 ---
 
 ```{r setup, include=FALSE}
@@ -42,7 +42,7 @@ library(viridis)
 
 # Etude du jeu de données
 
-On observe pour G = 1615 gènes d’une plante modèle les valeurs suivantes :
+On observe pour G = 1615 gènes d’une plante modèle les valeurs suivantes :-
 Ygtsr = log2(Xgtsr + 1) − log2(Xgt0 + 1)
 o`u
 • Xgtsr est la mesure d’expression du gène g ∈ {G1, . . . , G1615} pour le traitement t ∈ {T 1, T 2, T 3}
@@ -118,8 +118,15 @@ Ces résultats montrent clairement que les variables ont des variances et des é
 
 
 ```{r}
-res_pca = PCA(t(data), scale.unit = T, grap=T)
+res_pca = PCA(t(data), scale.unit = F, grap=T)
 ```
+
+```{r}
+fviz_eig(res_pca)
+```
+
+
+
 
 ### Clustering
 
@@ -185,7 +192,17 @@ ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
 ```
 ```{r}
 
-kgene2=kmeans(data_t,centers=2)
+kgene2=kmeans(data_t,centers=3, nstart=10)
+fviz_cluster(kgene2,data=data_t,ellipse.type="norm",labelsize=8,geom=c("point","text"))+ggtitle("")
+table(kgene2$cluster)
+#on les colorie avec les classes de kmeans
+fviz_pca_ind(res_pca, col.ind=as.factor(kgene2$cluster),geom=c("point","text"),axes=c(1,2))
+kgene2$cluster
+```
+
+```{r}
+
+kgene2=kmeans(data_t,centers=4, nstart = 10)
 fviz_cluster(kgene2,data=data_t,ellipse.type="norm",labelsize=8,geom=c("point","text"))+ggtitle("")
 table(kgene2$cluster)
 #on les colorie avec les classes de kmeans
@@ -273,6 +290,73 @@ table(kgene$cluster,ClustCH4)
 ```
 
 D'après la représentation des individus obtenue par l'ACP, il apparaît qu'il existe trois classes homogènes. Pour confirmer cette observation, nous allons utiliser un modèle de classification non supervisée. À cette fin, nous opterons pour l'algorithme de `k-means`, car nous connaissons le nombre de classes. C'est un algorithme est largement utilisé et connu par sa rapidité et de sa capacité à former des classes bien séparées.
+
+## Modèles de mélange gaussiens
+
+```{r}
+resICL <- mclustICL(data_t, G=2:15)
+summary(resICL)
+```
+
+```{r}
+clustICL = Mclust(data_t, G=7, modelNames="VEI")
+Aux<-data.frame(label=as.factor(clustICL$classification), proba=apply(clustICL$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustICL, ellipse.type="norm", data=data_t)
+```
+
+```{r}
+table(clustICL$classification, kgene$cluster)
+adjustedRandIndex(clustICL$classification, kgene$cluster)
+# Il y a une certaine cohérence -> les classes des kmeans ont été séparées en plusieurs classes et la classes 3 est résté la même.
+# Ajouter le truc fluvial
+```
+
+
+```{r}
+table(clustICL$classification)
+for (i in 1:max(clustICL$classification)){
+  print(i)
+  print(rownames(data_t[clustICL$classification==i, ]))
+}
+
+```
+
+
+```{r}
+clustBICvar = Mclust(data_t, G=2:15)
+```
+On fait le même choix que ICL
+
+```{r}
+fviz_mclust(clustBICvar, what=c("BIC"))
+Aux<-data.frame(label=as.factor(clustBICvar$classification), proba=apply(clustBICvar$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustBICvar, ellipse.type="norm", data=data_t)
+```
+
+### mélanges sur le résultat de l'acp
+
+On utilise les 5 premières composantes de l'acp pour le clustering
+
+```{r}
+resICL <- mclustICL(res_pca$ind$coord, G=2:15)
+summary(resICL)
+```
+
+
+
+```{r}
+clustBIC <- Mclust(res_pca$ind$coord, G=2:15)
+summary(resBIC)
+```
+
+```{r}
+fviz_mclust(clustBIC, what=c("BIC"))
+Aux<-data.frame(label=as.factor(clustBIC$classification), proba=apply(clustBIC$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustBIC, ellipse.type="norm", data=data_t)
+```
 
 #### Représentaion des individus
 
@@ -372,6 +456,7 @@ table(kgene2$cluster)
 fviz_pca_ind(res_pca_ind,col.ind=as.factor(kgene2$cluster),geom=c("point"),axes=c(1,2))
 ```
 
+
 ```{r}
 #choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
 Kmax<-15
@@ -446,6 +531,27 @@ get_code = function(data){
   
   code = rep(2, nrow(data_m))
   
+  code[data_m$T1_6h < -1] = 0
+  code[data_m$T1_6h > 1] = 1
+  code = as.factor(code)
+  return(code)
+}
+
+#mean_replicat(first_ind)
+code <- get_code(data)
+summary(code)
+
+fviz_pca_ind(res_pca_ind,col.ind=as.factor(code),geom=c("point"),axes=c(1,2))
+
+
+get_code = function(data){
+  # 1-> sur
+  # 0 -> sous
+  # 2 -> non exprimé
+  data_m = mean_replicat(data)
+  
+  code = rep(2, nrow(data_m))
+  
   code[data_m$T3_6h < -1] = 0
   code[data_m$T3_6h > 1] = 1
   code = as.factor(code)
@@ -455,6 +561,28 @@ get_code = function(data){
 #mean_replicat(first_ind)
 code <- get_code(data)
 summary(code)
+
+fviz_pca_ind(res_pca_ind,col.ind=as.factor(code),geom=c("point"),axes=c(1,2))
+
+get_code = function(data){
+  # 1-> sur
+  # 0 -> sous
+  # 2 -> non exprimé
+  data_m = mean_replicat(data)
+  
+  code = rep(2, nrow(data_m))
+  
+  code[data_m$T2_6h < -1] = 0
+  code[data_m$T2_6h > 1] = 1
+  code = as.factor(code)
+  return(code)
+}
+
+#mean_replicat(first_ind)
+code <- get_code(data)
+summary(code)
+
+fviz_pca_ind(res_pca_ind,col.ind=as.factor(code),geom=c("point"),axes=c(1,2))
 ```
 
 
@@ -502,6 +630,79 @@ corrplot(t(res_pca_ind$var$cor))
 
 # qt 1 organisation des var -> ACP des variavbles
 ```
+
+
+## Modèles de mélange gaussiens
+
+Résultat pas fitable
+```{r}
+
+res_pca_ind = PCA(data, scale.unit = F)
+resICL <- mclustICL(res_pca_ind$ind$coord, G=2:15)
+summary(resICL)
+```
+
+```{r}
+clustICL = Mclust(res_pca_ind$ind$coord, G=6, modelNames="VVV")
+Aux<-data.frame(label=as.factor(clustICL$classification), proba=apply(clustICL$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustICL, ellipse.type="norm", data=data)
+```
+
+```{r}
+table(clustICL$classification, kgene$cluster)
+adjustedRandIndex(clustICL$classification, kgene$cluster)
+# Il y a une certaine cohérence -> les classes des kmeans ont été séparées en plusieurs classes et la classes 3 est résté la même.
+```
+
+
+```{r}
+table(clustICL$classification)
+for (i in 1:max(clustICL$classification)){
+  print(i)
+  print(rownames(data_t[clustICL$classification==i, ]))
+}
+
+```
+
+
+```{r}
+names = c("VVV")
+clustICLvvv = mclustICL(data, G=2:15, modelNames=names)
+```
+```{r}
+summary(clustICLvvv)
+```
+
+
+```{r}
+clustICLvvv = Mclust(data, G=4, modelNames="VVV")
+Aux<-data.frame(label=as.factor(clustICLvvv$classification), proba=apply(clustICLvvv$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustICLvvv, ellipse.type="norm", data=data)
+```
+
+```{r}
+names = c("EII", "VII", "EEI", "VEI", "EVI", "VVI")
+clustICLdiag = mclustICL(data, G=2:15, modelNames=names)
+summary(clustICLdiag)
+```
+
+
+```{r}
+clustICLdiag = Mclust(data, G=15, modelNames="VEI")
+Aux<-data.frame(label=as.factor(clustICLdiag$classification), proba=apply(clustICLdiag$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_cluster(clustICLdiag, ellipse.type="norm", data=data)
+```
+
+```{r}
+table(kgene2$cluster, clustICLdiag$classification)
+adjustedRandIndex(kgene2$cluster, clustICLdiag$classification)
+table(code, clustICLdiag$classification)
+adjustedRandIndex(code, clustICLdiag$classification)
+```
+
 
 ## ANCOVA
 
