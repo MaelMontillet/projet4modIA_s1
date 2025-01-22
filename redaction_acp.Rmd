@@ -37,7 +37,7 @@ Dans notre cas il ne faut pas centrer les données car nos variables sont toutes
 
 ## ACP avec les gènes comme individus 
 
-On analyse le jeu de donnée avec les gènes comme individus. On travaille donc avec 1615 individus et 36 variables.
+On analyse le jeu de donnée avec les gènes comme individus. On travaille donc avec 2144 individus et 36 variables.
 Comme l'axe j de l'acp correspond au pourcentage de l'inertie $\frac{\lambda_j}{\sum_{i=1}^p \lambda_i}$ (avec p le nombre de variables), on doit choisir le nombre de composantes principales suffisant pour couvrir $80%$ de l'inertie.
 
 ```{r, echo=FALSE}
@@ -172,7 +172,7 @@ fviz_pca_var(acp.ind, col.var=traitements, axes=c(1, 2), legend.title="traitemen
 
 ## ACP des variables 
 
-On analyse le jeu de donnée avec les variables comme individus. On possède donc 1615 variables et 36 individus.
+On analyse le jeu de donnée avec les variables comme individus. On possède donc 2144 variables et 36 individus.
 Deux axes sont suffisants pour obtenir $87%$ de l'inertie.
 
 ```{r}
@@ -223,7 +223,7 @@ acp.ind$eig[5, 3]
 
 Pour chosir le nombre de classes du clustering avec les k-means, nous avons mit en competition les critères silhouette et Calinski-Harabasz et le choix fait avec le coude de l'inertie intra-classes (*)
 
-```{r, echo=False}
+```{r, echo=FALSE}
 data = acp.ind$ind$coord[, 1:5]
 
 #choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
@@ -242,7 +242,7 @@ ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+
 # On trouve un coude autour de 4 classes
 ```
 
-```{r, echo=False}
+```{r, echo=FALSE}
 Silhou<-NULL
 Kmax<-15
 for (k in 2:Kmax){
@@ -257,7 +257,7 @@ ggplot(df,aes(x=K,y=Silhouette))+
 # On trouve un pic à 2 classes 
 ```
 
-```{r, echo=False}
+```{r, echo=FALSE}
 Kmax<-15
 CH <- NULL
 for (k in 2:Kmax){
@@ -303,7 +303,7 @@ adjustedRandIndex(kmeans.ind2, kmeans.ind4)
 On se rend compte que le clustering à 4 classes et obtenu en séprant en deux les classes du clustering à 2 classes.
 
 ```{r}
-ggplot(data_m, aes(x=kmeans.ind4, y=T3_6h)) + geom_boxplot()
+ggplot(data_mean, aes(x=kmeans.ind4, y=T3_6h)) + geom_boxplot()
 ```
 Comme pour le clustering à 2 classes, les clustering à 4 classes sépare les individus selon l'expression des gènes cependant il le fait en offrant 4 niveau d'expression differents : de la classe 1 à 4, les gènes sont regroupés par ordre croissant selon l'expression de leurs gènes.
 
@@ -314,7 +314,7 @@ Nous avons essayé les critères BIC et ICL mais les modèles obtenu n'était pa
 
 ```{r}
 clustBIC <- Mclust(acp.ind$ind$coord, G=2:15)
-summary(resBIC)
+summary(clustBIC)
 ```
 
 
@@ -350,6 +350,12 @@ fviz_pca_ind(acp.ind, habillage=as.factor(clustICL$classification), geom=c("poin
 
 # Clustering des variables
 
+On considère maintenant les variables comme individus.
+On possède donc 36 individus et 2144 variables. Il est donc necessaire de faire une ACP avant de faire nos clusterings.
+
+```{r}
+acp.var[]
+```
 
 
 
