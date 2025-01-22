@@ -176,7 +176,7 @@ On analyse le jeu de donnée avec les variables comme individus. On possède don
 Deux axes sont suffisants pour obtenir $87%$ de l'inertie.
 
 ```{r}
-acp.var = PCA(t(data), scale.unit = F, graph = F)
+acp.var = PCA(t(data), scale.unit = F, graph = F, ncp=7)
 acp.var$eig[2, 3]
 ```
 
@@ -307,7 +307,6 @@ ggplot(data_mean, aes(x=kmeans.ind4, y=T3_6h)) + geom_boxplot()
 ```
 Comme pour le clustering à 2 classes, les clustering à 4 classes sépare les individus selon l'expression des gènes cependant il le fait en offrant 4 niveau d'expression differents : de la classe 1 à 4, les gènes sont regroupés par ordre croissant selon l'expression de leurs gènes.
 
-
 ## Modèles de mélange gaussien
 
 Nous avons essayé les critères BIC et ICL mais les modèles obtenu n'était pas satisfaisant, il comportaient beaucoups de classes et nous avons eu du mal à bien les interpreter (*).
@@ -353,12 +352,177 @@ fviz_pca_ind(acp.ind, habillage=as.factor(clustICL$classification), geom=c("poin
 On considère maintenant les variables comme individus.
 On possède donc 36 individus et 2144 variables. Il est donc necessaire de faire une ACP avant de faire nos clusterings.
 
+Nous avons choisit de conserver les 7 composantes principles de l'ACP des individus car cela nous permet de conserver plus de 95% de la variance.
+
 ```{r}
-acp.var[]
+acp.var$eig[7, 3]
+```
+
+## K-means
+
+Pour chosir le nombre de classes du clustering avec les k-means, nous avons mit en competition les critères silhouette et Calinski-Harabasz et le choix fait avec le coude de l'inertie intra-classes (*)
+
+```{r, echo=FALSE}
+data_var = acp.var$ind$coord[, 1:7]
+
+#choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
+Kmax<-15
+reskmeanscl<-matrix(0,nrow=nrow(data_var),ncol=Kmax-1)
+Iintra<-NULL
+for (k in 2:Kmax){
+  resaux<-kmeans(data_var, centers=k,nstart=10)
+  reskmeanscl[,k-1]<-resaux$cluster
+  Iintra<-c(Iintra,resaux$tot.withinss)
+}
+
+df<-data.frame(K=2:15,Iintra=Iintra)
+ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+ylab("Inertie intraclasse")
+
+# On trouve un coude autour de 4 classes
+```
+
+```{r, echo=FALSE}
+Silhou<-NULL
+Kmax<-15
+for (k in 2:Kmax){
+   aux<-silhouette(reskmeanscl[,k-1], daisy(data_var))
+   Silhou<-c(Silhou, mean(aux[,3]))
+}
+
+df<-data.frame(K=2:Kmax,Silhouette=Silhou)
+ggplot(df,aes(x=K,y=Silhouette))+
+  geom_point()+
+  geom_line()+theme(legend.position = "bottom")
+# On trouve un pic à 2 classes 
+```
+
+```{r, echo=FALSE}
+Kmax<-15
+CH <- NULL
+for (k in 2:Kmax){
+  CH<-c(CH,index.G1(data_var, reskmeanscl[, k-1]))
+}
+daux<-data.frame(NbClust=2:Kmax,CH=CH)
+ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
+#Pic à deux classes
+```
+
+Les critères silhouette et Calinski-Harabrasz choisissent un nombre de classe de deux. Avec l'inertie intra-classes un choisit un nombre de classes de 3.
+
+Le clustering à quatres classes peut être obtenu à partir du clustering à deux classes en divisant la seconde classe en trois nouvelles classes.
+
+```{r}
+kmeans.var4 = reskmeanscl[, 3]
+kmeans.var2 = reskmeanscl[, 1]
+table(kmeans.var2, kmeans.var3)
+```
+
+De plus, visuellement lorsqu'on projette les variables dans le premier plan factoriel de leur ACP, on observe plus 4 classes que 2 classes.
+Nous avons donc décidé de retenir le clustering à 4 classes.
+
+```{r}
+fviz_pca_ind(acp.var, habillage=as.factor(kmeans.var4), geom=c("point"), axes=c(1,2), legend.title="kmeans 4 classes")
 ```
 
 
+### Interpretation
 
+```{r}
+for (i in 1:max(kmeans.var4)){
+  print(i)
+  print(colnames(data[, kmeans.var4==i]))
+}
+```
+
+Ce clustering semble rassembler ensemble les variables pour lesquelles les gènes ont une expression similaire. 
+
+Une classes correspond aux variables du traitement 1 pour lesquelles les gènes sont en général non exprimé. La autre classe correspond aux variables pour lesquelles les gène sont en train de s'exprimer : ce sont les variables du traitement 2 et 3 pour les heures 2 et 3. La dernière classe rassemble les traitement 2 et 3 pour les heures superieures à 3.
+
+
+## CAH
+
+Nous avons testé la classification hierarchique sur notre jeu de donnée avec plusieurs liens differents. Nous avons choisi de retenir le lien de Ward car il est construit de telle manière qu'il chosit à chaque étape de rassembler les deux classes dont le regroupement implique une augmentation minimale de l’inertie intraclasse.
+
+
+```{r}
+d = dist(data_var, method="euclidian")
+hward<-hclust(d, method="ward.D2")
+```
+Comme la hauteur dans le dendogramme avec le lien Ward correspond à l'inertie-intraclasses, on peut l'utiliser pour choisir un nombre de classe
+
+```{r}
+hauteurs = rev(hward$height)
+daux<-data.frame(NbClust=2:15, hauteurs=hauteurs[1:14])
+ggplot(daux,aes(x=NbClust,y=hauteurs))+geom_line()+geom_point()
+```
+Le coude d'inertie-intra se trouve à nouveau à 4. Nous avons aussi essayé le critère de Calinski-Harabasz mais il choisit 2 qui est un mauvais choix pour les mêmes raisons qu'avec les kmeans (*).
+
+```{r}
+#le nombre de classes à retenir avec l'indice de Calinski-Harabasz
+CH<-NULL
+Kmax<-15
+for (k in 2:Kmax){
+
+  CH<-c(CH,index.G1(data_var,cl=cutree(hward,k)))
+}
+daux<-data.frame(NbClust =2:Kmax, CH=CH)
+ggplot(daux,aes(x=NbClust, y=CH))+geom_line()+geom_point()
+```
+
+### Correspondance avec les kmeans
+
+Nous avons donc coupé le dendogramme pour obtenir 4 classes. Le clustering obtenu est exactement le même que celui des kmeans avec 4 classes.
+```{r}
+CAH.var4<-cutree(hward, k=4)
+fviz_dend(hward,show_labels=TRUE,k=4,kcolors=TRUE)
+table(CAH.var4, kmeans.var3)
+```
+
+
+## Modèles de mélange gaussiens
+
+Nous avons essayé d'utiliser les modèles de mélange gaussien pour classer nos variables.
+Nous avons comparé les critères de BIC et ICL en s'attendant à avoir un modèle avec moins de paramètres pour le critère ICL. En effet entre c'est deux critères, la seule différence est l'ajout d'un terme d'entropie dans le critère ICL qui pénalise les modèles avec une mauvaise classification. ICL a donc tendence à retenir des modèles plus petits.
+
+Cependent, nous avons obtenu la même selection de modèles pour les deux critères : VEV (ellipsoidal avec la même forme) avec 6 composantes.
+
+```{r}
+clustBIC <- Mclust(data_var, G=2:15)
+summary(clustBIC)
+```
+```{r}
+choixICl = mclustICL(data=data_var, G=1:15)
+summary(choixICl)
+```
+
+
+```{r}
+#fviz_mclust(clustBIC, what=c("BIC"))
+Aux<-data.frame(label=as.factor(clustBIC$classification), proba=apply(clustBIC$z, 1, max))
+ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
+fviz_pca_ind(acp.var, habillage=as.factor(clustBIC$classification), geom=c("point"), axes=c(1, 2))
+```
+### Correspondance avec le clustering précedent
+Le clustering est cohérent avec le clustering à 4 classes obtenu précedenment : il peut être obtenu en subdivisant le clustering précedent.
+
+```{r}
+table(kmeans.var4, clustBIC$classification)
+```
+
+### Interpretation
+
+```{r}
+table(clustBIC$classification)
+for (i in 1:max(clustBIC$classification)){
+  print(i)
+  print(colnames(data[, clustBIC$classification==i]))
+}
+```
+
+Ce clustering regroupe ensembles les variables du traitement 1 en deux classes : une classe pour les heures petites, et une pour les heures grandes.
+Ensuite il y a une classe pour la première heure des traitement 1 et 2. Il y a une classe pour les heures 2 et 3 des traitement 1 et 2. Une classe pour les heures 4 et 5 des traitements 2 et 3. Et enfin une classe pour l'heure 6 de ces mêmes traitements.
+
+Donc, comme pour les kmeans, ce clustering semble séparer les variables selon l'expression des gènes pour ces variables. Elle les classe cependant avec une graduation plus importante en apportant plus de classes intérmédiaires.
 
 
 
