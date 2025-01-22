@@ -224,14 +224,14 @@ acp.ind$eig[5, 3]
 Pour chosir le nombre de classes du clustering avec les k-means, nous avons mit en competition les critères silhouette et Calinski-Harabasz et le choix fait avec le coude de l'inertie intra-classes (*)
 
 ```{r, echo=FALSE}
-data = acp.ind$ind$coord[, 1:5]
+data_ind = acp.ind$ind$coord[, 1:5]
 
 #choix du nombre de classes $K$ en étudiant l'évolution de l'inertie intraclasse.
 Kmax<-15
-reskmeanscl<-matrix(0,nrow=nrow(data),ncol=Kmax-1)
+reskmeanscl<-matrix(0,nrow=nrow(data_ind),ncol=Kmax-1)
 Iintra<-NULL
 for (k in 2:Kmax){
-  resaux<-kmeans(data, centers=k,nstart=10)
+  resaux<-kmeans(data_ind, centers=k,nstart=10)
   reskmeanscl[,k-1]<-resaux$cluster
   Iintra<-c(Iintra,resaux$tot.withinss)
 }
@@ -246,7 +246,7 @@ ggplot(df,aes(x=K,y=Iintra))+geom_line()+geom_point()+xlab("Nombre de classes")+
 Silhou<-NULL
 Kmax<-15
 for (k in 2:Kmax){
-   aux<-silhouette(reskmeanscl[,k-1], daisy(data))
+   aux<-silhouette(reskmeanscl[,k-1], daisy(data_ind))
    Silhou<-c(Silhou, mean(aux[,3]))
 }
 
@@ -261,7 +261,7 @@ ggplot(df,aes(x=K,y=Silhouette))+
 Kmax<-15
 CH <- NULL
 for (k in 2:Kmax){
-  CH<-c(CH,index.G1(data, reskmeanscl[, k-1]))
+  CH<-c(CH,index.G1(data_ind, reskmeanscl[, k-1]))
 }
 daux<-data.frame(NbClust=2:Kmax,CH=CH)
 ggplot(daux,aes(x=NbClust,y=CH))+geom_line()+geom_point()
@@ -321,7 +321,7 @@ summary(clustBIC)
 fviz_mclust(clustBIC, what=c("BIC"))
 Aux<-data.frame(label=as.factor(clustBIC$classification), proba=apply(clustBIC$z, 1, max))
 ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
-fviz_cluster(clustBIC, ellipse.type="norm", data=data_t)
+fviz_cluster(clustBIC, ellipse.type="norm", data=data_ind)
 ```
 
 ```{r}
@@ -341,7 +341,7 @@ summary(choixICL)
 clustICL = Mclust(acp.ind$ind$coord, G=8, modelNames="VVV")
 Aux<-data.frame(label=as.factor(clustICL$classification), proba=apply(clustICL$z, 1, max))
 ggplot(Aux,aes(x=label,y=proba))+geom_boxplot()
-fviz_cluster(clustICL, ellipse.type="norm", data=data_t)
+fviz_cluster(clustICL, ellipse.type="norm", data=data_ind)
 fviz_pca_ind(acp.ind, habillage=as.factor(clustICL$classification), geom=c("point"), axes=c(1,2))
 ```
 
@@ -414,7 +414,7 @@ Le clustering à quatres classes peut être obtenu à partir du clustering à de
 ```{r}
 kmeans.var4 = reskmeanscl[, 3]
 kmeans.var2 = reskmeanscl[, 1]
-table(kmeans.var2, kmeans.var3)
+table(kmeans.var2, kmeans.var4)
 ```
 
 De plus, visuellement lorsqu'on projette les variables dans le premier plan factoriel de leur ACP, on observe plus 4 classes que 2 classes.
@@ -475,7 +475,7 @@ Nous avons donc coupé le dendogramme pour obtenir 4 classes. Le clustering obte
 ```{r}
 CAH.var4<-cutree(hward, k=4)
 fviz_dend(hward,show_labels=TRUE,k=4,kcolors=TRUE)
-table(CAH.var4, kmeans.var3)
+table(CAH.var4, kmeans.var4)
 ```
 
 
